@@ -1,11 +1,12 @@
 use pyo3::{
     exceptions::PyValueError, pyclass, pymethods, pymodule, types::PyModule, PyErr, PyResult,
-    Python,
+    Python, wrap_pyfunction, pyfunction,
 };
 
 #[pymodule]
 fn game_of_life(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Field>()?;
+    m.add_function(wrap_pyfunction!(get_status, m)?)?;
     Ok(())
 }
 
@@ -22,7 +23,7 @@ struct Field {
 impl Field {
     // FIXME: error handling
     #[new]
-    fn new(width: usize, height: usize, cells: Vec<usize>) -> Result<Field, PyErr> {
+    fn new(width: usize, height: usize, cells: Vec<u8>) -> Result<Field, PyErr> {
         if width * height != cells.len() {
             return Err(PyValueError::new_err("Invalid cells length"));
         }
@@ -69,9 +70,26 @@ impl Field {
         self.cells = next;
     }
 
-    pub fn drow(&self) -> String {
+    fn drow(&self) -> String {
         self.to_string()
     }
+
+    fn drow_as_2d_bit_array(&self) -> Vec<Vec<u8>> {
+        let mut result = Vec::new();
+        for line in self.cells.as_slice().chunks(self.width as usize) {
+            let mut inner = Vec::new();
+            for &cell in line.iter() {
+                match cell {
+                    CellState::Alive => inner.push(1),
+                    CellState::Dead => inner.push(0),
+                }
+            }
+            result.push(inner);
+        }
+        result
+    }
+
+    // fn get_status(&self, )
 }
 
 // private methods
@@ -129,4 +147,14 @@ impl std::fmt::Display for CellState {
             CellState::Alive => write!(f, "■"),
         }
     }
+}
+
+#[pyfunction]
+fn get_status(field: &mut Field, frame_n: u8) -> Vec<Vec<Vec<u8>>> {
+    let mut status = Vec::new();
+    for _ in 0..frame_n {
+        field.next();
+        status.push(field.drow_as_2d_bit_array());
+    }
+    status
 }
